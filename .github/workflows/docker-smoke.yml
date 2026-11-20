@@ -1,0 +1,30 @@
+name: Docker replay smoke test
+on: [push, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  replay:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Build and run container
+        run: |
+          mkdir -p output
+          docker build -t capstone-replay .
+          docker run --rm -v "$PWD/output:/output" capstone-replay
+      - name: Verify both replay paths
+        run: |
+          python3 - <<'PY'
+          import csv
+          from collections import Counter
+          with open("output/predictions.csv", newline="") as handle:
+              counts = Counter(row["pipeline"] for row in csv.DictReader(handle))
+          print(dict(counts))
+          assert counts["stream"] == 60 and counts["batch"] > 0, counts
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: synthetic-replay-predictions
+          path: output/predictions.csv
+          retention-days: 14
